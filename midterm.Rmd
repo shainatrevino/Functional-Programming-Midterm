@@ -1,0 +1,67 @@
+---
+title: "Midterm"
+author: "Shaina Trevino"
+date: "4/27/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(glue)
+library(rio)
+```
+
+## Setup
+
+Loading the data takes a minute, so I would suggest you do it once and cache it. This just means including  `knitr::opts_chunk$set(cache = TRUE)` in one of your chunk options.
+
+The problem with caching is that sometimes results of a later chunk depend upon earlier ones and things can get out of sync. If you make a change and it doesn’t have the result you expect, try clearing the cache and knitting again.
+
+If you don't cache it will just take a little longer to render your file each time you click “knit”.
+
+I would also recommend not tracking the cache files. This means adding the cache folder to your .gitignore file. If you initialized your repo with the R .gitignore file this is actually already taken of for you. If not, add /*_cache/ to your  .gitignore.
+
+## Part A: Data
+
+The following function downloads data from the Oregon Department of education website on the number of students who scored in each performance category on the statewide assessment by race/ethnicity for every school in the state. It takes one argument, `year`, which must be a two digit integer from 15 to 18 (representing the 2014-15 to 2017-18 school years).
+
+NOTE: This function uses the `glue` function from the package of the same name. If you do not already have this package installed, please first install it with `install.packages("glue")`. It also uses `{rio}` for the import, which you should already have installed, but if not, install that first too.
+
+```{r ed_data_function}
+download_file <- function(year) {
+    link <- glue::glue("https://www.oregon.gov/ode/educator-resources/assessment/TestResults20{year}/pagr_schools_ela_raceethnicity_{year-1}{year}.xlsx")
+    rio::import(link, setclass = "tibble", na = c("-", "--", "*"))
+}
+```
+
+1. Use the function above to download all the data for each of the past 4 school years and bind it into a single data frame, using a single function (i.e., one line of code). Note, this may take a minute or two to run, depending on your Internet speed.
+
+```{r data}
+knitr::opts_chunk$set(cache = TRUE)
+
+d <- map_df(seq(from = 15, to = 18, by = 1), download_file) #the argument for the function above is the sequence
+
+```
+
+Conduct some basic data cleaning to make your data file look like the following.
+
+* Filter for only student groups coded as `"White"` or `"Hispanic/Latino"`.
+
+* Select variables related to the number of students in each of the levels (1:4), and not percentages or collapsed levels.
+
+* Remove any row that has missing data in any of the n variables
+
+```{r clean_data}
+td <- d %>% 
+  janitor::clean_names() %>% 
+  filter(student_group == "White" | student_group == "Hispanic/Latino") %>% 
+  select(academic_year, district, school, student_group, grade_level, starts_with("number_level")) %>% 
+  pivot_longer(cols = number_level_4:number_level_1, 
+               names_to = "level",
+               values_to = "n") %>% 
+  filter(!is.na(n)) %>% 
+  mutate(level = parse_number(level))
+td
+```
+
