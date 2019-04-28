@@ -61,7 +61,48 @@ td <- d %>%
                names_to = "level",
                values_to = "n") %>% 
   filter(!is.na(n)) %>% 
-  mutate(level = parse_number(level))
+  mutate(level = parse_number(level)) %>% 
+  arrange(academic_year, district, school, student_group, grade_level, level)
 td
 ```
 
+2. Calculate the cumulative n for each school by student group, grade, and academic year. The result should look like the below. Hint, look at `?base::cumsum`.
+
+```{r cumsum}
+td_long <- td %>% 
+  group_by(academic_year, district, school, student_group, grade_level) %>% 
+  mutate(cn = cumsum(n))
+td_long
+```
+
+```{r alterntive, include = FALSE, eval = FALSE}
+sd1 <- td %>% 
+  group_by(academic_year, district, school, student_group, grade_level) %>% 
+  nest() %>% 
+  mutate(data = map(data, ~mutate(.x, cn = cumsum(.x$n)))) %>% 
+  unnest() #same answer as group by and mutate above
+```
+
+3. Reformat the data so it looks like the below, removing `n` and filling by `cn`. Remove rows that have missing data for either student group.
+
+```{r pivot_wide}
+td_wide <- td_long %>% 
+  select(-n) %>% 
+  pivot_wider(names_from = student_group,
+              values_from = cn) %>% 
+  janitor::clean_names() %>% 
+  filter(!is.na(hispanic_latino), !is.na(white)) %>% 
+  arrange(academic_year,
+          district,
+          grade_level,
+          level)
+td_wide
+```
+
+## Part B: Achievement Gaps
+
+The function below estimates the average difference between two distributions in terms of an effect size. In this case, we are using the cumulative counts to approximate the empirical cumulative distribution function for each group. The distance between the distributions is then estimated and transformed to an effect size-like measure (for more information, see [Ho & Reardon, 2012](https://journals.sagepub.com/doi/abs/10.3102/1076998611411918?journalCode=jebb)). The nice thing about this approach, is that we’re able to obtain an effect size on the average difference in achievement between to groups of students *as if we had the full, student level data* even though we just have the counts within each category.
+
+In the below function, the first argument supplied is the data source, followed by two string variables, the names of the reference and focal distributions, respectively (e.g., `"white"` and `"hispanic_latino"` in this case).
+
+Note - you’ll need to install the `{pracma}` package first (assuming you don’t have it installed already, of course).
